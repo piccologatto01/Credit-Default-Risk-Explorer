@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.idea/
+
+# Source datasets and generated demo data
+data/raw/*
+!data/raw/.gitkeep
+data/demo/*
+!data/demo/.gitkeep
+data/legacy_retailrocket/
+
+# Generated analytics, submissions and model artifacts
+data/processed/*
+!data/processed/.gitkeep
+*.joblib
+
+# Local system files
+.DS_Store

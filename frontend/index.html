@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Интерактивный дашборд модели кредитного скоринга" />
+    <title>Credit Scoring Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/frontend/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <section class="hero">
+        <div>
+          <h1>Прогноз дефолта по кредитной заявке</h1>
+          <p class="hero-copy">Интерактивный разбор модели кредитного скоринга: качество ранжирования, рабочий порог, децили риска и интерпретация факторов.</p>
+        </div>
+        <div class="model-card">
+          <span>Модель и валидация</span>
+          <strong id="validation-label">Загрузка данных</strong>
+          <div class="status"><i></i><span id="mode-label">Подготовка отчёта</span></div>
+        </div>
+      </section>
+
+      <div id="demo-banner" class="banner hidden">
+        <strong>Демонстрационный режим</strong>
+        <span>Заявки синтетические. Метрики проверяют пайплайн, а не качество реальной кредитной политики.</span>
+      </div>
+
+      <main>
+        <section id="metrics" class="metrics" aria-label="Ключевые показатели"></section>
+
+        <section class="decision-strip" aria-label="Рабочая точка модели">
+          <div><h2>Рабочая точка модели</h2><p class="decision-copy">Порог выбран при минимальном recall дефолтов 70%.</p></div>
+          <div id="decision-metrics" class="decision-metrics"></div>
+        </section>
+
+        <section class="chart-grid">
+          <article class="panel">
+            <div class="panel-heading compact">
+              <div><h2>ROC-кривая</h2><p class="panel-subtitle">Качество ранжирования заявок</p></div>
+            </div>
+            <div id="roc-chart" class="chart" role="img" aria-label="ROC-кривая модели"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading compact">
+              <div><h2>Precision–Recall</h2><p class="panel-subtitle">Качество прогноза редкого класса</p></div>
+            </div>
+            <div id="pr-chart" class="chart" role="img" aria-label="Precision-recall кривая"></div>
+          </article>
+
+          <article class="panel panel-wide">
+            <div class="panel-heading">
+              <div><h2>Децили риска</h2><p class="panel-subtitle">Концентрация дефолтов по уровню скоринга</p></div>
+              <p class="panel-note">Дециль 1 — 10% заявок с максимальным модельным риском. Линия показывает накопленную долю найденных дефолтов.</p>
+            </div>
+            <div id="decile-chart" class="chart" role="img" aria-label="Дефолтность по децилям риска"></div>
+          </article>
+
+          <article class="panel panel-wide">
+            <div class="panel-heading">
+              <div><h2>Факторы модели</h2><p class="panel-subtitle">Признаки, связанные с изменением риска</p></div>
+              <label class="range-control"><span>Показывать факторов: <strong id="features-value">12</strong></span><input id="features-filter" type="range" min="5" max="20" value="12" step="1" /></label>
+            </div>
+            <div id="importance-chart" class="chart" role="img" aria-label="Важность признаков модели"></div>
+          </article>
+
+          <article class="panel panel-wide">
+            <div class="panel-heading">
+              <div><h2>Распределение скоринга</h2><p class="panel-subtitle">Прогнозный риск для двух классов</p></div>
+              <p class="panel-note">Разделение классов важно сильнее, чем совпадение единичного прогноза. Пунктир — выбранный порог.</p>
+            </div>
+            <div id="distribution-chart" class="chart" role="img" aria-label="Распределение вероятности дефолта"></div>
+          </article>
+        </section>
+
+        <section class="guardrails">
+          <div><h2>Ограничения и развитие проекта</h2><p class="guardrails-copy">Что потребуется добавить перед использованием модели на реальных кредитных решениях.</p></div>
+          <div class="guardrail-list">
+            <article><span>01</span><div><h3>Цена ошибок</h3><p>Порог нужно оптимизировать по ожидаемому убытку, марже, LGD/EAD и стоимости отказа хорошему клиенту.</p></div></article>
+            <article><span>02</span><div><h3>Стабильность</h3><p>Нужны out-of-time проверка, мониторинг drift, калибровка вероятностей и контроль качества данных.</p></div></article>
+            <article><span>03</span><div><h3>Интерпретация</h3><p>Коэффициенты показывают связь с прогнозом, но не причинность. Чувствительные признаки требуют отдельной fairness-проверки.</p></div></article>
+          </div>
+        </section>
+
+        <div id="error-state" class="error-state hidden"></div>
+      </main>
+
+      <footer>Pet project · Python · scikit-learn · D3.js</footer>
+    </div>
+    <div id="tooltip" class="tooltip" aria-hidden="true"></div>
+    <script type="module" src="/frontend/app.js"></script>
+  </body>
+</html>
