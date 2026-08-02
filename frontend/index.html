@@ -29,11 +29,15 @@
         <span>Заявки синтетические. Метрики проверяют пайплайн, а не качество реальной кредитной политики.</span>
       </div>
 
-      <main>
+      <main id="main-content" aria-busy="true">
+        <div id="status-message" class="sr-only" role="status" aria-live="polite" aria-atomic="true">Загрузка данных…</div>
+        <div id="error-state" class="error-state hidden" role="alert"></div>
+
+        <div id="dashboard-content">
         <section id="metrics" class="metrics" aria-label="Ключевые показатели"></section>
 
         <section class="decision-strip" aria-label="Рабочая точка модели">
-          <div><h2>Рабочая точка модели</h2><p class="decision-copy">Порог выбран при минимальном recall дефолтов 70%.</p></div>
+          <div><h2>Рабочая точка модели</h2><p class="decision-copy">Порог выбран при минимальной полноте обнаружения дефолтов (recall) 70%.</p></div>
           <div id="decision-metrics" class="decision-metrics"></div>
         </section>
 
@@ -42,14 +46,24 @@
             <div class="panel-heading compact">
               <div><h2>ROC-кривая</h2><p class="panel-subtitle">Качество ранжирования заявок</p></div>
             </div>
-            <div id="roc-chart" class="chart" role="img" aria-label="ROC-кривая модели"></div>
+            <figure class="chart-figure">
+              <div id="roc-chart" class="chart chart-scroll-region" role="region" tabindex="0" aria-label="ROC-кривая модели" aria-describedby="roc-summary"></div>
+              <p class="chart-scroll-hint" aria-hidden="true">Прокрутите график по горизонтали →</p>
+              <figcaption id="roc-summary" class="sr-only"></figcaption>
+              <details class="data-disclosure"><summary>Показать таблицу данных</summary><div id="roc-data" class="table-scroll"></div></details>
+            </figure>
           </article>
 
           <article class="panel">
             <div class="panel-heading compact">
-              <div><h2>Precision–Recall</h2><p class="panel-subtitle">Качество прогноза редкого класса</p></div>
+              <div><h2>Точность–полнота</h2><p class="panel-subtitle">Precision–Recall для редкого класса</p></div>
             </div>
-            <div id="pr-chart" class="chart" role="img" aria-label="Precision-recall кривая"></div>
+            <figure class="chart-figure">
+              <div id="pr-chart" class="chart chart-scroll-region" role="region" tabindex="0" aria-label="Кривая точности–полноты" aria-describedby="pr-summary"></div>
+              <p class="chart-scroll-hint" aria-hidden="true">Прокрутите график по горизонтали →</p>
+              <figcaption id="pr-summary" class="sr-only"></figcaption>
+              <details class="data-disclosure"><summary>Показать таблицу данных</summary><div id="pr-data" class="table-scroll"></div></details>
+            </figure>
           </article>
 
           <article class="panel panel-wide">
@@ -57,7 +71,12 @@
               <div><h2>Децили риска</h2><p class="panel-subtitle">Концентрация дефолтов по уровню скоринга</p></div>
               <p class="panel-note">Дециль 1 — 10% заявок с максимальным модельным риском. Линия показывает накопленную долю найденных дефолтов.</p>
             </div>
-            <div id="decile-chart" class="chart" role="img" aria-label="Дефолтность по децилям риска"></div>
+            <figure class="chart-figure">
+              <div id="decile-chart" class="chart chart-scroll-region" role="region" tabindex="0" aria-label="Дефолтность по децилям риска" aria-describedby="decile-summary"></div>
+              <p class="chart-scroll-hint" aria-hidden="true">Прокрутите график по горизонтали →</p>
+              <figcaption id="decile-summary" class="sr-only"></figcaption>
+              <details class="data-disclosure"><summary>Показать таблицу данных</summary><div id="decile-data" class="table-scroll"></div></details>
+            </figure>
           </article>
 
           <article class="panel panel-wide">
@@ -65,7 +84,12 @@
               <div><h2>Факторы модели</h2><p class="panel-subtitle">Признаки, связанные с изменением риска</p></div>
               <label class="range-control"><span>Показывать факторов: <strong id="features-value">12</strong></span><input id="features-filter" type="range" min="5" max="20" value="12" step="1" /></label>
             </div>
-            <div id="importance-chart" class="chart" role="img" aria-label="Важность признаков модели"></div>
+            <figure class="chart-figure">
+              <div id="importance-chart" class="chart chart-scroll-region" role="region" tabindex="0" aria-label="Важность признаков модели" aria-describedby="importance-summary"></div>
+              <p class="chart-scroll-hint" aria-hidden="true">Прокрутите график по горизонтали →</p>
+              <figcaption id="importance-summary" class="sr-only"></figcaption>
+              <details class="data-disclosure"><summary>Показать таблицу данных</summary><div id="importance-data" class="table-scroll"></div></details>
+            </figure>
           </article>
 
           <article class="panel panel-wide">
@@ -73,7 +97,12 @@
               <div><h2>Распределение скоринга</h2><p class="panel-subtitle">Прогнозный риск для двух классов</p></div>
               <p class="panel-note">Разделение классов важно сильнее, чем совпадение единичного прогноза. Пунктир — выбранный порог.</p>
             </div>
-            <div id="distribution-chart" class="chart" role="img" aria-label="Распределение вероятности дефолта"></div>
+            <figure class="chart-figure">
+              <div id="distribution-chart" class="chart chart-scroll-region" role="region" tabindex="0" aria-label="Распределение вероятности дефолта" aria-describedby="distribution-summary"></div>
+              <p class="chart-scroll-hint" aria-hidden="true">Прокрутите график по горизонтали →</p>
+              <figcaption id="distribution-summary" class="sr-only"></figcaption>
+              <details class="data-disclosure"><summary>Показать таблицу данных</summary><div id="distribution-data" class="table-scroll"></div></details>
+            </figure>
           </article>
         </section>
 
@@ -86,10 +115,10 @@
           </div>
         </section>
 
-        <div id="error-state" class="error-state hidden"></div>
+        </div>
       </main>
 
-      <footer>Pet project · Python · scikit-learn · D3.js</footer>
+      <footer>Учебный проект · Python · scikit-learn · D3.js</footer>
     </div>
     <div id="tooltip" class="tooltip" aria-hidden="true"></div>
     <script type="module" src="/frontend/app.js"></script>

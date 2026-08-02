@@ -5,6 +5,7 @@ const colors = { green: "#335c67", lime: "#e09f3e", orange: "#9e2a2b", blue: "#5
 const number = new Intl.NumberFormat("ru-RU");
 const percent = d3.format(".1%");
 const tooltip = d3.select("#tooltip");
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function showTooltip(event, html) {
   tooltip.html(html).style("left", `${event.clientX}px`).style("top", `${event.clientY}px`).classed("visible", true).attr("aria-hidden", "false");
@@ -12,11 +13,67 @@ function showTooltip(event, html) {
 
 function hideTooltip() { tooltip.classed("visible", false).attr("aria-hidden", "true"); }
 
+function announce(message) {
+  document.querySelector("#status-message").textContent = message;
+}
+
+function sampleRows(rows, maxRows) {
+  if (rows.length <= maxRows) return rows;
+  const indexes = new Set(d3.range(maxRows).map(i => Math.round(i * (rows.length - 1) / (maxRows - 1))));
+  return [...indexes].map(index => rows[index]);
+}
+
+function renderDataTable(selector, caption, headers, rows, sourceHref, maxRows = 60) {
+  const container = document.querySelector(selector);
+  container.replaceChildren();
+
+  const table = document.createElement("table");
+  const captionElement = document.createElement("caption");
+  captionElement.textContent = caption;
+  table.append(captionElement);
+
+  const head = table.createTHead().insertRow();
+  headers.forEach(label => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = label;
+    head.append(cell);
+  });
+
+  const body = table.createTBody();
+  sampleRows(rows, maxRows).forEach(row => {
+    const tableRow = body.insertRow();
+    row.forEach(value => {
+      const cell = tableRow.insertCell();
+      cell.textContent = value;
+    });
+  });
+  container.append(table);
+
+  if (rows.length > maxRows) {
+    const note = document.createElement("p");
+    note.className = "table-note";
+    note.textContent = `Показано ${maxRows} репрезентативных точек из ${number.format(rows.length)}.`;
+    container.append(note);
+  }
+
+  const link = document.createElement("a");
+  link.className = "data-download";
+  link.href = sourceHref;
+  link.download = "";
+  link.textContent = "Скачать полные данные CSV";
+  container.append(link);
+}
+
+function formatThreshold(value) {
+  return Number.isFinite(+value) ? percent(+value) : "Выше максимального значения";
+}
+
 function svgFor(selector, height, minWidth = 0) {
   const node = document.querySelector(selector);
   node.replaceChildren();
   const width = Math.max(minWidth, node.clientWidth || 640);
-  const svg = d3.select(node).append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", width).attr("height", height);
+  const svg = d3.select(node).append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", width).attr("height", height).attr("aria-hidden", "true").attr("focusable", "false");
   return { node, svg, width, height };
 }
 
@@ -38,10 +95,10 @@ function renderMetrics(summary) {
 
 function renderDecision(summary) {
   const values = [
-    ["Recall дефолтов", percent(summary.recall_at_threshold)],
-    ["Precision", percent(summary.precision_at_recall)],
+    ["Полнота дефолтов (Recall)", percent(summary.recall_at_threshold)],
+    ["Точность (Precision)", percent(summary.precision_at_recall)],
     ["Порог риска", percent(summary.operating_threshold)],
-    ["Approval rate", percent(summary.approval_rate)],
+    ["Доля заявок ниже порога", percent(summary.approval_rate)],
   ];
   d3.select("#decision-metrics").selectAll("div").data(values).join("div")
     .html(([label, value]) => `<span>${label}</span><strong>${value}</strong>`);
@@ -49,7 +106,7 @@ function renderDecision(summary) {
 
 function renderRoc(data, summary) {
   const { svg, width, height } = svgFor("#roc-chart", 350, 430);
-  const margin = { top: 18, right: 24, bottom: 48, left: 54 };
+  const margin = { top: 18, right: 24, bottom: 58, left: 72 };
   const x = d3.scaleLinear([0, 1], [margin.left, width - margin.right]);
   const y = d3.scaleLinear([0, 1], [height - margin.bottom, margin.top]);
   grid(svg, y, margin, width);
@@ -58,13 +115,16 @@ function renderRoc(data, summary) {
   svg.append("path").datum([{ fpr: 0, tpr: 0 }, ...data, { fpr: 1, tpr: 0 }]).attr("d", d3.area().x(d => x(+d.fpr)).y0(y(0)).y1(d => y(+d.tpr))).attr("fill", colors.green).attr("opacity", .08);
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.format(".0%")));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
-  svg.append("text").attr("class", "chart-label").attr("x", width - margin.right).attr("y", height - 8).attr("text-anchor", "end").text("False positive rate");
+  svg.append("text").attr("class", "chart-label").attr("x", width - margin.right).attr("y", height - 8).attr("text-anchor", "end").text("Доля ложноположительных решений");
+  svg.append("text").attr("class", "chart-label").attr("transform", "rotate(-90)").attr("x", -(margin.top + height - margin.bottom) / 2).attr("y", 14).attr("text-anchor", "middle").text("Доля найденных дефолтов (Recall)");
   svg.append("text").attr("class", "chart-kpi").attr("x", margin.left + 18).attr("y", margin.top + 34).text(`AUC ${d3.format(".3f")(summary.roc_auc)}`);
+  document.querySelector("#roc-summary").textContent = `ROC-кривая модели. ROC-AUC ${d3.format(".3f")(summary.roc_auc)}. Чем ближе кривая к левому верхнему углу, тем лучше модель ранжирует риск.`;
+  renderDataTable("#roc-data", "Репрезентативные точки ROC-кривой", ["Доля ложноположительных", "Доля найденных дефолтов (Recall)", "Порог риска"], data.map(d => [percent(+d.fpr), percent(+d.tpr), formatThreshold(d.threshold)]), `${DATA_ROOT}/roc_curve.csv`, 30);
 }
 
 function renderPr(data, summary) {
   const { svg, width, height } = svgFor("#pr-chart", 350, 430);
-  const margin = { top: 18, right: 24, bottom: 48, left: 54 };
+  const margin = { top: 18, right: 24, bottom: 58, left: 72 };
   const x = d3.scaleLinear([0, 1], [margin.left, width - margin.right]);
   const y = d3.scaleLinear([0, 1], [height - margin.bottom, margin.top]);
   grid(svg, y, margin, width);
@@ -73,27 +133,42 @@ function renderPr(data, summary) {
   svg.append("circle").attr("cx", x(summary.recall_at_threshold)).attr("cy", y(summary.precision_at_recall)).attr("r", 6).attr("fill", colors.lime).attr("stroke", colors.ink).attr("stroke-width", 2);
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.format(".0%")));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
-  svg.append("text").attr("class", "chart-label").attr("x", width - margin.right).attr("y", height - 8).attr("text-anchor", "end").text("Recall");
+  svg.append("text").attr("class", "chart-label").attr("x", width - margin.right).attr("y", height - 8).attr("text-anchor", "end").text("Полнота (Recall)");
+  svg.append("text").attr("class", "chart-label").attr("transform", "rotate(-90)").attr("x", -(margin.top + height - margin.bottom) / 2).attr("y", 14).attr("text-anchor", "middle").text("Точность (Precision)");
   svg.append("text").attr("class", "chart-kpi").attr("x", margin.left + 18).attr("y", margin.top + 34).text(`AP ${d3.format(".3f")(summary.average_precision)}`);
+  document.querySelector("#pr-summary").textContent = `Кривая точности–полноты. Average Precision ${d3.format(".3f")(summary.average_precision)}, базовый уровень ${percent(summary.baseline_average_precision)}.`;
+  renderDataTable("#pr-data", "Репрезентативные точки кривой точности–полноты", ["Полнота (Recall)", "Точность (Precision)", "Порог риска"], data.map(d => [percent(+d.recall), percent(+d.precision), formatThreshold(d.threshold)]), `${DATA_ROOT}/pr_curve.csv`, 30);
 }
 
 function renderDeciles(data) {
-  const { svg, width, height } = svgFor("#decile-chart", 390, 720);
-  const margin = { top: 22, right: 62, bottom: 54, left: 58 };
+  const { node, svg, width, height } = svgFor("#decile-chart", 410, 720);
+  const margin = { top: 58, right: 84, bottom: 58, left: 76 };
   const x = d3.scaleBand(data.map(d => +d.risk_decile), [margin.left, width - margin.right]).padding(.25);
   const yRate = d3.scaleLinear([0, d3.max(data, d => +d.default_rate) * 1.15], [height - margin.bottom, margin.top]);
   const yCapture = d3.scaleLinear([0, 1], [height - margin.bottom, margin.top]);
   grid(svg, yRate, margin, width);
-  svg.append("g").selectAll("rect").data(data).join("rect")
+  d3.select(node).insert("div", "svg").attr("class", "legend").selectAll("span").data([
+    [colors.green, "Дефолтность в дециле"],
+    [colors.orange, "Накопленная доля найденных дефолтов"],
+  ]).join("span").html(([color, label]) => `<i style="background:${color}"></i>${label}`);
+  const bars = svg.append("g").selectAll("rect").data(data).join("rect")
     .attr("x", d => x(+d.risk_decile)).attr("width", x.bandwidth()).attr("y", yRate(0)).attr("height", 0).attr("rx", 2).attr("fill", colors.green)
-    .on("mousemove", (event, d) => showTooltip(event, `<strong>Дециль ${d.risk_decile}</strong><br>Дефолтность ${percent(+d.default_rate)}<br>Найдено накопленно ${percent(+d.captured_defaults)}`)).on("mouseleave", hideTooltip)
-    .transition().duration(550).attr("y", d => yRate(+d.default_rate)).attr("height", d => yRate(0) - yRate(+d.default_rate));
+    .on("mousemove", (event, d) => showTooltip(event, `<strong>Дециль ${d.risk_decile}</strong><br>Дефолтность ${percent(+d.default_rate)}<br>Найдено накопленно ${percent(+d.captured_defaults)}`)).on("mouseleave", hideTooltip);
+  if (reducedMotion.matches) {
+    bars.attr("y", d => yRate(+d.default_rate)).attr("height", d => yRate(0) - yRate(+d.default_rate));
+  } else {
+    bars.transition().duration(550).attr("y", d => yRate(+d.default_rate)).attr("height", d => yRate(0) - yRate(+d.default_rate));
+  }
   svg.append("path").datum(data).attr("d", d3.line().x(d => x(+d.risk_decile) + x.bandwidth() / 2).y(d => yCapture(+d.captured_defaults)).curve(d3.curveMonotoneX)).attr("stroke", colors.orange).attr("stroke-width", 3).attr("fill", "none");
   svg.append("g").selectAll("circle").data(data).join("circle").attr("cx", d => x(+d.risk_decile) + x.bandwidth() / 2).attr("cy", d => yCapture(+d.captured_defaults)).attr("r", 4).attr("fill", colors.orange).attr("stroke", "white").attr("stroke-width", 2);
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x).tickSize(0).tickPadding(12));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(yRate).ticks(5).tickFormat(d3.format(".0%")));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${width - margin.right},0)`).call(d3.axisRight(yCapture).ticks(5).tickFormat(d3.format(".0%")));
   svg.append("text").attr("class", "chart-label").attr("x", width / 2).attr("y", height - 9).attr("text-anchor", "middle").text("От высокого риска → к низкому");
+  svg.append("text").attr("class", "chart-label").attr("transform", "rotate(-90)").attr("x", -(margin.top + height - margin.bottom) / 2).attr("y", 14).attr("text-anchor", "middle").text("Дефолтность в дециле");
+  svg.append("text").attr("class", "chart-label").attr("transform", "rotate(90)").attr("x", (margin.top + height - margin.bottom) / 2).attr("y", -(width - 10)).attr("text-anchor", "middle").text("Накопленная доля дефолтов");
+  document.querySelector("#decile-summary").textContent = `Первый дециль содержит заявки максимального риска: дефолтность ${percent(+data[0].default_rate)}, накопленная доля найденных дефолтов ${percent(+data[0].captured_defaults)}.`;
+  renderDataTable("#decile-data", "Дефолтность по децилям риска", ["Дециль", "Заявки", "Дефолты", "Дефолтность", "Накопленная доля дефолтов"], data.map(d => [number.format(d.risk_decile), number.format(d.applications), number.format(d.defaults), percent(+d.default_rate), percent(+d.captured_defaults)]), `${DATA_ROOT}/risk_deciles.csv`);
 }
 
 function renderImportance(data, count) {
@@ -107,6 +182,8 @@ function renderImportance(data, count) {
     .on("mousemove", (event, d) => showTooltip(event, `<strong>${d.feature}</strong><br>${d.direction === "risk_up" ? "Связан с ростом" : "Связан со снижением"} риска<br>Доминирующий коэффициент ${d3.format("+.3f")(+d.coefficient)}`)).on("mouseleave", hideTooltip);
   svg.append("g").selectAll("text.value").data(top).join("text").attr("class", "bar-value").attr("x", d => x(+d.importance) + 7).attr("y", d => y(d.feature) + y.bandwidth() / 2 + 4).text(d => d.direction === "risk_up" ? "↑ риск" : "↓ риск").attr("fill", d => d.direction === "risk_up" ? colors.orange : colors.green);
   svg.append("text").attr("class", "chart-label").attr("x", margin.left).attr("y", height - 8).text("Сумма абсолютных коэффициентов по исходному признаку");
+  document.querySelector("#importance-summary").textContent = `Показано ${number.format(top.length)} факторов модели. Цвет и подпись показывают направление связи с прогнозным риском.`;
+  renderDataTable("#importance-data", `Топ-${top.length} факторов модели`, ["Фактор", "Важность", "Направление", "Коэффициент"], [...top].reverse().map(d => [d.feature, d3.format(".3f")(+d.importance), d.direction === "risk_up" ? "Связан с ростом риска" : "Связан со снижением риска", d3.format("+.3f")(+d.coefficient)]), `${DATA_ROOT}/feature_importance.csv`);
 }
 
 function renderDistribution(data, summary) {
@@ -127,6 +204,8 @@ function renderDistribution(data, summary) {
   svg.append("text").attr("x", x(summary.operating_threshold) + 7).attr("y", margin.top + 12).attr("class", "chart-label").text(`Порог ${percent(summary.operating_threshold)}`);
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x).ticks(10).tickFormat(d3.format(".0%")));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
+  document.querySelector("#distribution-summary").textContent = `Распределение прогнозной вероятности дефолта для заявок без дефолта и с дефолтом. Рабочий порог риска ${percent(summary.operating_threshold)}.`;
+  renderDataTable("#distribution-data", "Распределение прогнозного риска", ["Класс", "От", "До", "Заявки", "Доля класса"], data.map(d => [+d.target === 1 ? "Дефолт" : "Без дефолта", percent(+d.score_from), percent(+d.score_to), number.format(d.applications), percent(d.share)]), `${DATA_ROOT}/score_distribution.csv`);
 }
 
 function empty(selector, message) { document.querySelector(selector).innerHTML = `<div class="empty-state">${message}</div>`; }
@@ -141,7 +220,8 @@ async function loadDashboard() {
       d3.csv(`${DATA_ROOT}/feature_importance.csv`, d3.autoType),
       d3.csv(`${DATA_ROOT}/score_distribution.csv`, d3.autoType),
     ]);
-    document.querySelector("#validation-label").textContent = `${number.format(summary.validation_applications)} заявок · ${summary.validation}`;
+    const validationLabel = String(summary.validation).replace("stratified holdout", "стратифицированная выборка");
+    document.querySelector("#validation-label").textContent = `${number.format(summary.validation_applications)} заявок · ${validationLabel}`;
     document.querySelector("#mode-label").textContent = summary.data_mode === "demo" ? "Синтетические данные" : "Данные Kaggle";
     document.querySelector("#demo-banner").classList.toggle("hidden", summary.data_mode !== "demo");
     renderMetrics(summary); renderDecision(summary); renderRoc(roc, summary); renderPr(pr, summary); renderDeciles(deciles); renderDistribution(distribution, summary);
@@ -152,12 +232,17 @@ async function loadDashboard() {
       slider.min = Math.min(5, importance.length);
       slider.value = Math.min(12, importance.length);
       const update = () => { document.querySelector("#features-value").textContent = slider.value; renderImportance(importance, +slider.value); };
-      slider.addEventListener("input", update); update();
+      slider.addEventListener("input", () => { update(); announce(`Показано факторов: ${slider.value}.`); }); update();
     }
+    document.querySelector("#main-content").setAttribute("aria-busy", "false");
+    announce("Данные загружены. Отображено пять графиков.");
   } catch (error) {
+    document.querySelector("#main-content").setAttribute("aria-busy", "false");
+    document.querySelector("#dashboard-content").hidden = true;
     const box = document.querySelector("#error-state");
     box.classList.remove("hidden");
     box.innerHTML = `<strong>Не удалось загрузить результаты.</strong><br>Сначала запустите <code>make demo</code> или <code>make analyze</code>, затем обновите страницу.`;
+    document.querySelector("#status-message").textContent = "";
     console.error(error);
   }
 }
